@@ -1,5 +1,6 @@
 var express = require('express');
 var bodyParser = require('body-parser');
+var request = require('request');
 var _ = require('lodash');
 var app = express();
 
@@ -49,11 +50,12 @@ var table =
       [ 1234567, 'US', 321 ],
     ]
   };
-  
+
+
 function setCORSHeaders(res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST");
-  res.setHeader("Access-Control-Allow-Headers", "accept, content-type");  
+  res.setHeader("Access-Control-Allow-Headers", "accept, content-type");
 }
 
 
@@ -74,12 +76,10 @@ app.all('/', function(req, res) {
 
 app.all('/search', function(req, res){
   setCORSHeaders(res);
-  var result = [];
-  _.each(timeserie, function(ts) {
-    result.push(ts.target);
-  });
-
-  res.json(result);
+  console.log('req.url', req.url);
+  // TODO: auto generate metric name based on pubsub topic
+  var metrics = ["Twitter Top N Hashtags"];
+  res.json(metrics);
   res.end();
 });
 
@@ -94,26 +94,74 @@ app.all('/annotations', function(req, res) {
 
 app.all('/query', function(req, res){
   setCORSHeaders(res);
-  console.log(req.url);
-  console.log(req.body);
+  console.log('req.url', req.url);
+  console.log('req.body', req.body);
 
   var tsResult = [];
-  _.each(req.body.targets, function(target) {
-    if (target.type === 'table') {
-      tsResult.push(table);
-    } else {
-      var k = _.filter(timeserie, function(t) {
-        return t.target === target.target;
-      });
+  var pubSubTopic = 'twitter.topN';
 
-      _.each(k, function(kk) {
-        tsResult.push(kk)
-      });
+  // TODO: add support for multiple targets
+
+  // get info from server
+  // TODO pubsub topic name
+  request('http://localhost:8890/ws/v1/pubsub/topics/'+pubSubTopic,
+    function (error, response, body) {
+      // if the topic is not registered with the pubsub server
+      if (response && response.statusCode && (response.statusCode === 404)) {
+        console.log('ERROR: status code: ', response.statusCode);
+        res.json([]);
+        res.end();
+        return;
+      }
+
+      // parse body object
+      body = JSON.parse(body);
+
+      if (body && body.data && body.data.result) {
+
+        var rows = [];
+        var cols = [];
+        // tableCols structure:
+        // [{"text": "Hashtag"}, {"text": "Count"}]
+        var tableCols = [];
+        var keys = [];
+
+        // get data object keys
+        for (key in body.data.result[0]) {
+          if(body.data.result[0].hasOwnProperty(key)) {
+            keys.push(key);
+            tableCols.push({"text":key})
+          }
+        }
+
+        // structure data
+        for (var i=0; i < body.data.result.length; i++) {
+          var row = [];
+          for (var j=0; j<keys.length; j++) {
+            row.push(body.data.result[i][keys[j]]);
+          }
+          rows.push(row);
+        }
+
+        var tableData = {
+          "columns": tableCols,
+          "rows": rows,
+          "type": "table"
+        };
+        res.json([tableData]);
+        res.end();
+      }
+
+      // no body or body.data or body.data.result
+      else {
+        res.json([]);
+        res.end();
+      }
+
     }
-  });
+  );
 
-  res.json(tsResult);
-  res.end();
+  // TODO: add response for timeseries data
 });
 
 app.listen(3333);
