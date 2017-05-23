@@ -58,7 +58,7 @@ function setCORSHeaders(res) {
   res.setHeader("Access-Control-Allow-Headers", "accept, content-type");
 }
 
-
+var url = 'http://localhost:8890';
 var now = Date.now();
 var decreaser = 0;
 for (var i = 0;i < table.values.length; i++) {
@@ -78,9 +78,31 @@ app.all('/search', function(req, res){
   setCORSHeaders(res);
   console.log('req.url', req.url);
   // TODO: auto generate metric name based on pubsub topic
-  var metrics = ["Twitter Top N Hashtags"];
-  res.json(metrics);
+  var topics = ["Twitter Top N Hashtags"];
+  res.json(topics);
   res.end();
+  return;
+
+  request(url + '/ws/v1/pubsub/topics',
+    function (error, response, body) {
+      if (response && response.statusCode && (response.statusCode === 404)) {
+        console.log('ERROR: status code: ', response.statusCode);
+        res.json([]);
+        res.end();
+        return;
+      }
+
+      var topics = [];
+      body = JSON.parse(body);
+      if (body) {
+        for (var i=0; i < body.length; i++) {
+          topics.push(body[i].topic);
+        }
+      }
+      res.json(topics);
+      res.end();
+    }
+  );
 });
 
 app.all('/annotations', function(req, res) {
@@ -104,7 +126,7 @@ app.all('/query', function(req, res){
 
   // get info from server
   // TODO pubsub topic name
-  request('http://localhost:8890/ws/v1/pubsub/topics/'+pubSubTopic,
+  request(url + '/ws/v1/pubsub/topics/'+pubSubTopic,
     function (error, response, body) {
       // if the topic is not registered with the pubsub server
       if (response && response.statusCode && (response.statusCode === 404)) {
