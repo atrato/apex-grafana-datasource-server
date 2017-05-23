@@ -98,7 +98,7 @@ app.all('/query', function(req, res){
   console.log('req.body', req.body);
 
   var tsResult = [];
-  var pubSubTopic = 'twitter.topN';
+  var pubSubTopic = 'twitter.topHashtags';
 
   // TODO: add support for multiple targets
 
@@ -117,7 +117,7 @@ app.all('/query', function(req, res){
       // parse body object
       body = JSON.parse(body);
 
-      if (body && body.data && body.data.result) {
+      if (body && body.data && body.data.data) {
 
         var rows = [];
         var cols = [];
@@ -127,18 +127,18 @@ app.all('/query', function(req, res){
         var keys = [];
 
         // get data object keys
-        for (key in body.data.result[0]) {
-          if(body.data.result[0].hasOwnProperty(key)) {
+        for (key in body.data.data[0]) {
+          if(body.data.data[0].hasOwnProperty(key)) {
             keys.push(key);
             tableCols.push({"text":key})
           }
         }
 
         // structure data
-        for (var i=0; i < body.data.result.length; i++) {
+        for (var i=0; i < body.data.data.length; i++) {
           var row = [];
           for (var j=0; j<keys.length; j++) {
-            row.push(body.data.result[i][keys[j]]);
+            row.push(body.data.data[i][keys[j]]);
           }
           rows.push(row);
         }
