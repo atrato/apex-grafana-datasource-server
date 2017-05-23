@@ -76,12 +76,13 @@ app.all('/', function(req, res) {
 
 app.all('/search', function(req, res){
   setCORSHeaders(res);
-  console.log('req.url', req.url);
+  console.log('search: req.url', req.url);
+  console.log('search: req.body', req.body);
   // TODO: auto generate metric name based on pubsub topic
-  var topics = ["Twitter Top N Hashtags"];
-  res.json(topics);
-  res.end();
-  return;
+  //var topics = ["Twitter Top N Hashtags"];
+  //res.json(topics);
+  //res.end();
+  //return;
 
   request(url + '/ws/v1/pubsub/topics',
     function (error, response, body) {
@@ -116,28 +117,43 @@ app.all('/annotations', function(req, res) {
 
 app.all('/query', function(req, res){
   setCORSHeaders(res);
-  console.log('req.url', req.url);
-  console.log('req.body', req.body);
+  //console.log('req.url', req.url);
+  //console.log('req.body', req.body);
+
+  var reqJson = req.body;
+  if (!reqJson || !reqJson.targets) {
+    console.log('ERROR: cannot resolve pubsub topic from', req.body);
+    res.json([]);
+    res.end();
+    return;
+  }
 
   var tsResult = [];
-  var pubSubTopic = 'twitter.topHashtags';
+  //var pubSubTopic = 'twitter.topHashtags';
+  var pubSubTopic = reqJson.targets[0].target;
 
   // TODO: add support for multiple targets
 
-  // get info from server
-  // TODO pubsub topic name
   request(url + '/ws/v1/pubsub/topics/'+pubSubTopic,
     function (error, response, body) {
       // if the topic is not registered with the pubsub server
       if (response && response.statusCode && (response.statusCode === 404)) {
-        console.log('ERROR: status code: ', response.statusCode);
+        console.log('ERROR: topic: ', pubSubTopic, ' status code: ', response.statusCode);
         res.json([]);
         res.end();
         return;
       }
 
       // parse body object
-      body = JSON.parse(body);
+      console.log('response for ' + pubSubTopic + ':', body)
+      try {
+        body = JSON.parse(body);
+      } catch (error) {
+        console.log('ERROR: parsing response: ', error);
+        res.json([]);
+        res.end();
+        return;
+      }
 
       if (body && body.data && body.data.data) {
 
