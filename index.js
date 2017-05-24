@@ -129,23 +129,21 @@ app.all('/query', function(req, res){
   }
 
   var tsResult = [];
-  //var pubSubTopic = 'twitter.topHashtags';
-  var pubSubTopic = reqJson.targets[0].target;
+  var topic = reqJson.targets[0].target;
 
   // TODO: add support for multiple targets
 
-  request(url + '/ws/v1/pubsub/topics/'+pubSubTopic,
+  request(url + '/ws/v1/pubsub/topics/' + topic,
     function (error, response, body) {
       // if the topic is not registered with the pubsub server
       if (response && response.statusCode && (response.statusCode === 404)) {
-        console.log('ERROR: topic: ', pubSubTopic, ' status code: ', response.statusCode);
+        console.log('ERROR: topic: ', topic, ' status code: ', response.statusCode);
         res.json([]);
         res.end();
         return;
       }
 
-      // parse body object
-      console.log('response for ' + pubSubTopic + ':', body)
+      console.log('response for ', topic, ':', body)
       try {
         body = JSON.parse(body);
       } catch (error) {
@@ -157,20 +155,47 @@ app.all('/query', function(req, res){
 
       if (body && body.data && body.data.data) {
 
-        var rows = [];
-        var cols = [];
+        // get data object keys
+        var keys = [];
         // tableCols structure:
         // [{"text": "Hashtag"}, {"text": "Count"}]
         var tableCols = [];
-        var keys = [];
-
-        // get data object keys
         for (key in body.data.data[0]) {
           if(body.data.data[0].hasOwnProperty(key)) {
             keys.push(key);
             tableCols.push({"text":key})
           }
         }
+
+        if (body.data.data[0] && body.data.data[0].timestamp) {
+
+          // time series data
+          var tsArray = [];
+          for (var j=0; j<keys.length; j++) {
+            if (keys[j] != "timestamp") {
+              var tsRow = {};
+              tsRow.target = keys[j];
+              tsRow.datapoints = [];
+              tsArray.push(tsRow);
+            }
+          }
+
+          for (var i=0; i < body.data.data.length; i++) {
+            for (var j=0; j<tsArray.length; j++) {
+              var datapoint = [];
+              datapoint[0] = body.data.data[i][tsArray[j].target];
+              datapoint[1] = body.data.data[i]["timestamp"];
+              tsArray[j].datapoints.push(datapoint);
+            }
+          }
+          //console.log('time series for ' + topic + ':', JSON.stringify(tsArray));
+          res.json(tsArray);
+          res.end();
+          return;
+        }
+
+        var rows = [];
+        var cols = [];
 
         // structure data
         for (var i=0; i < body.data.data.length; i++) {
@@ -186,6 +211,9 @@ app.all('/query', function(req, res){
           "rows": rows,
           "type": "table"
         };
+
+
+        //console.log('response for ' + topic + ':', tableData)
         res.json([tableData]);
         res.end();
       }
@@ -199,7 +227,6 @@ app.all('/query', function(req, res){
     }
   );
 
-  // TODO: add response for timeseries data
 });
 
 app.listen(3333);
